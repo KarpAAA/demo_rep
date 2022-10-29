@@ -1,77 +1,245 @@
 #include <iostream>
-#include <thread>
-#include <mutex>
+#include <fstream>
+#include <sstream>
+#include <ctime>
+#include <cstdlib>
 #include <vector>
+#include <stdio.h>
+#include <pthread.h>
+#include <signal.h>
 #include <algorithm>
-#include <cmath>
-#define DEF_THREAD_COUNT 4
-const int N = 50000000;
-namespace MCConcurrency
-{
-	inline int threadsCount(int iterationsCount = -1)
-	{
-		int numThreads = static_cast<int>(std::thread::hardware_concurrency());
-		if (numThreads == 0)
-			numThreads = DEF_THREAD_COUNT;
-		if (iterationsCount == 0)
-			return 1;
-		if (iterationsCount > -1)
-			numThreads = std::min(static_cast<int>(numThreads), iterationsCount);
-		return numThreads;
-	}
-	template<typename Function>
-	void parallel_for(int first, int last, int threadsNumbers, const Function& l)
-	{
-		int numThreads = threadsNumbers;
-		int elementsCount = last - first;
-		//auto numThreads = threadsCount(last - first);
-		if (numThreads <= 0)
-			return;
-		int threadNumber = 0;
-		std::mutex tasksMutex;
-		std::vector<std::thread> threads;
-		const auto chunk = std::max(static_cast<int>(std::ceil(elementsCount /
-			static_cast<double>(numThreads))), 1);
-		for (int i = 0; i < numThreads; i++)
+
+using namespace std;
+
+typedef struct {
+	int threadNumber;
+	int startIndex;
+	int endIndex;
+} th_param;
+
+void printingTable(int threadAmount, pthread_t* threads);
+void fillArray();
+void* individualTask(void* args);
+void testPrintage();
+
+
+bool canAcsess = false;
+bool ifReady=true;
+pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
+char synhMethod = ' ';
+int n = 10000;
+int* arr;
+int threadsAmount;
+int globalMinimum;
+pthread_t* threads;
+pthread_mutex_t MUTEX = PTHREAD_MUTEX_INITIALIZER;
+pthread_barrier_t BARRIER;
+string conclusionString ="";
+int main() {
+	pthread_barrier_init(&BARRIER, NULL, threadsAmount);
+	srand(time(NULL));
+	fillArray();
+	globalMinimum = arr[0];
+	
+	bool ifChoiseMade = false;
+	pthread_t* threads = NULL;
+
+	//user entering threads amount
+	while (!ifChoiseMade) {
+		cout << "Enter amount of threads";
+		cin >> threadsAmount;
+		cout << "Type of synchronization:\n(b) - bariers\n(m) - for mutex: ";
+		cin >> synhMethod;
+
+		if (threadsAmount == 2 || threadsAmount == 4 || threadsAmount == 8 || threadsAmount == 16)
 		{
-			threads.push_back(std::thread([&]()
-				{
-					int thread_number;
-					tasksMutex.lock();
-					thread_number = threadNumber;
-					++threadNumber;
-					tasksMutex.unlock();
-					int beg = first + thread_number * chunk;
-					int end = std::min(first + (thread_number + 1) * chunk, elementsCount);
-					for (int ind = beg; ind < end; ind++)
-					{
-						l(ind, thread_number);
-					}
-				}));
+			threads = new pthread_t[threadsAmount];
+			ifChoiseMade = true;
 		}
-		std::for_each(begin(threads), end(threads), [](std::thread& th)
-			{
-				
-					th.join();
-			});
+		else {
+			system("cls");
+			cout << "Invalid data typed try again" << endl;
+		}
+	}
+
+
+	
+
+
+	//creating threads and measuring time thread 
+	clock_t* time = new clock_t[threadsAmount];
+	int ostacha = 0;
+	int amountPerThread = n / threadsAmount;
+	for (int i = 0; i < threadsAmount; ++i) {
+	    th_param param ={0,0,0};
+	    if (i == threadsAmount - 1) { ostacha = n % threadsAmount; }
+		param.threadNumber = i;
+		param.startIndex = (i * amountPerThread);
+		param.endIndex = (i * amountPerThread) + amountPerThread + ostacha;
+		
+		pthread_create(&threads[i], NULL, &individualTask, &param);
+		
+		time[i] = clock();
+	}
+
+	
+	while (true) {
+		printingTable(threadsAmount, threads);
+
+		char actionNumber;
+		cin >> actionNumber;
+		bool finish = false;
+
+		switch (actionNumber){
+
+		case '1':{
+			int numb;
+			cout << "Enter thread to be detached: ";
+			cin >> numb;
+
+			
+			pthread_detach(threads[numb]);
+			break;
+		}
+
+		case '2':{
+			int numb;
+			cout << "Enter number to be canceled: ";
+			cin >> numb;
+
+			
+			pthread_cancel(threads[numb]);
+			break;
+		}
+		
+		case '0':{
+			finish = true;
+			break;
+		}
+
+
+		default:
+			break;
+		}
+		if (finish) break;
+	}
+
+
+	for (int i = 0; i < threadsAmount; ++i) {
+	
+		pthread_join(threads[i],NULL);
+	}
+
+	cout << "Thread #\tTID\tTime spent" << endl;
+	cout << "-------------------------------------------" << endl;
+	for (int j = 0; j < threadsAmount; j++)
+	{
+		time[j] = clock() - time[j];
+		cout << "Thread #" + to_string(j) << "\t" << threads[j];
+		cout << "\t\t" << to_string(((double)time[j]) / CLOCKS_PER_SEC) << " s" << endl;
+	}
+	cout << "-------------------------------------------" << endl;
+
+
+
+	
+
+    
+	cout << "Minimum array element " << *std::min_element(arr, arr + n);
+	cout << " Found min element is : " << globalMinimum << "\n\n";
+	
+	testPrintage();
+	return 0;
+}
+
+void printingTable(int threadAmount, pthread_t* threads) {
+
+	cout << "\n\nThread#\t\t\tTid" << endl;
+	cout << "----------------------------------" << endl;
+
+	
+	for (int i = 0; i < threadAmount; i++){
+		cout << "thread #" + to_string(i) << "\t" << threads[i] << endl;
+	}
+
+	cout << "---------------------------------------------" << endl;
+
+	cout << "\n(1) - to detech a thread\n(2) - to cancel a thread\n\n\n(0) - to EXIT";
+	cout << "\n\nMake a choice : ";
+}
+void* individualTask(void* args) {
+	
+	int threadNumber = (int)((th_param*)args)->threadNumber;
+	int min = globalMinimum;
+	int startIndex = (int)((th_param*)args)->startIndex;
+	int endIndex = (int)((th_param*)args)->endIndex;
+
+
+	for (int i = startIndex; i < endIndex; ++i) {
+		if (min > arr[i]) {
+			min = arr[i];
+		}
+	}
+   
+
+	if (synhMethod == 'm') {
+	    
+		pthread_mutex_lock(&MUTEX);
+		while(!ifReady){
+		    pthread_cond_wait(&condition,&MUTEX);
+		}
+		ifReady = false;
+		
+		
+		if (min < globalMinimum) {
+
+			globalMinimum = min;
+		}
+		conclusionString += ("Min found by thread #" + std::to_string(threadNumber)
++ " : " + std::to_string(min) + " My range is [" +
+std::to_string(startIndex) + " " + std::to_string(endIndex - 1) + "]" + "\n");
+
+        ifReady = true;
+        pthread_cond_signal(&condition);
+		pthread_mutex_unlock(&MUTEX);
+		
+		
+	}
+
+	else if (synhMethod == 'b')
+	{
+		
+		if (min < globalMinimum) {
+			globalMinimum = min;
+		}
+		conclusionString += ("Min found by thread #" + std::to_string(threadNumber)
++ " : " + std::to_string(min) + " My range is [" +
+std::to_string(startIndex) + " " + std::to_string(endIndex - 1) + "]" + "\n");
+
+		pthread_barrier_wait(&BARRIER);
+	}
+	else {
+		if (min < globalMinimum) {
+			globalMinimum = min;
+		}
+	}
+	
+	return NULL;
+}
+
+void fillArray() {
+	arr = new int[n];
+	for (int i = 0; i < n; ++i) {
+		arr[i] = rand() % 100000;
 	}
 }
-int main()
-{
-	typedef std::chrono::high_resolution_clock Time;
-	typedef std::chrono::milliseconds ms;
-	typedef std::chrono::duration<float> fsec;
-	std::vector<float> arr(N);
-	auto numThreads = MCConcurrency::threadsCount(N);
-	std::cout << "Set process af inity (cores count) and press <Enter>";
-	getchar();
-	auto t0 = Time::now();
-	MCConcurrency::parallel_for(0, N, numThreads, [&](int nIndex, int threadNumber) {
-		arr[nIndex] = sin(threadNumber) * cos(threadNumber);
-		});
-	auto t1 = Time::now();
-	fsec fs = t1 - t0;
-	ms d = std::chrono::duration_cast<ms>(fs);
-	std::cout << "Duration: " << d.count() << "ms\n";
-	return 0;
+void showArray() {
+	cout << endl << endl;
+	for (int i = 0; i < n; ++i) {
+		cout << arr[i] << "\t";
+	}
+	cout << endl << endl;
+}
+void testPrintage() {
+cout << endl << endl << conclusionString << endl;
 }
