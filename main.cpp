@@ -7,6 +7,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <algorithm>
+//#include <signal.h>
+//#include <sched.h>
+//#include <sys/wait.h>
+#include <sys/resource.h>
+
 
 using namespace std;
 
@@ -36,6 +41,7 @@ pthread_mutex_t MUTEX;
 pthread_barrier_t BARRIER;
 string conclusionString = "";
 int* minArray;
+int* priorArray;
 int main ()
 {
 
@@ -66,6 +72,7 @@ int main ()
 	{
 	  threads = new pthread_t[threadsAmount];
 	  minArray = new int[threadsAmount];
+	  priorArray = new int[threadsAmount];
 	  ifChoiseMade = true;
 	   pthread_barrier_init(&BARRIER, NULL, threadsAmount);
 	}
@@ -76,7 +83,15 @@ int main ()
 	}
     }
 
-
+    int ifControPriority;
+    cout<<endl<<"IF you want to set priorities enter (1) else (0): ";
+    cin>>ifControPriority;
+    if(ifControPriority == 1){
+        for(int i=0;i<threadsAmount;++i){
+            cout<<"Enter priority for thread#"<<i<<": ";
+            cin >> priorArray[i];
+        }
+    }
 
 
 
@@ -98,7 +113,7 @@ int main ()
       params[i].endIndex = (i * amountPerThread) + amountPerThread + ostacha;
 
       pthread_create (&threads[i], NULL, &individualTask, &params[i]);
-
+      setpriority(PRIO_PROCESS, threads[i], priorArray[i]);
       time[i] = clock ();
     }
 
