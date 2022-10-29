@@ -1,16 +1,12 @@
-$ gcc -c simple.c
-$ gcc -o simple simple.o -lpthread
-$ ./simple
-
-#include <iostream>
 #include <ctime>
+#include <iostream>
 #include <vector>
-#include <unistd.h>
-#include <stdlib.h>
 #include <pthread.h>
-#include <algorithm>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <signal.h>
+#include <unistd.h>
+#include <algorithm>
 
 using namespace std;
 
@@ -31,26 +27,25 @@ bool canAcsess = false;
 bool ifReady = true;
 pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
 char synhMethod = ' ';
-int n = 10000;
+int n = 1000;
 int *arr;
 int threadsAmount;
 int globalMinimum;
 pthread_t *threads;
-pthread_mutex_t mutex;
+pthread_mutex_t MUTEX;
 pthread_barrier_t BARRIER;
 string conclusionString = "";
-
-int
-main ()
+int* minArray;
+int main ()
 {
 
-  if (pthread_mutex_init (&mutex, NULL) != 0)
+  if (pthread_mutex_init (&MUTEX, NULL) != 0)
     {
       printf ("\n mutex init has failed\n");
       return 1;
     }
 
-  pthread_barrier_init (&BARRIER, NULL, threadsAmount);
+ 
   srand (time (NULL));
   fillArray ();
   globalMinimum = arr[0];
@@ -67,10 +62,12 @@ main ()
       cin >> synhMethod;
 
       if (threadsAmount == 2 || threadsAmount == 4 || threadsAmount == 8
-	  || threadsAmount == 16)
+	  || threadsAmount == 16|| threadsAmount == 100)
 	{
 	  threads = new pthread_t[threadsAmount];
+	  minArray = new int[threadsAmount];
 	  ifChoiseMade = true;
+	   pthread_barrier_init(&BARRIER, NULL, threadsAmount);
 	}
       else
 	{
@@ -85,25 +82,28 @@ main ()
 
   //creating threads and measuring time thread 
   clock_t *time = new clock_t[threadsAmount];
+  th_param params[threadsAmount];
   int ostacha = 0;
   int amountPerThread = n / threadsAmount;
   for (int i = 0; i < threadsAmount; ++i)
     {
-      th_param param = { 0, 0, 0 };
+      
       if (i == threadsAmount - 1)
 	{
 	  ostacha = n % threadsAmount;
 	}
-      param.threadNumber = i;
-      param.startIndex = (i * amountPerThread);
-      param.endIndex = (i * amountPerThread) + amountPerThread + ostacha;
+	
+      params[i].threadNumber = i;
+      params[i].startIndex = (i * amountPerThread);
+      params[i].endIndex = (i * amountPerThread) + amountPerThread + ostacha;
 
-      pthread_create (&threads[i], NULL, &individualTask, &param);
+      pthread_create (&threads[i], NULL, &individualTask, &params[i]);
 
       time[i] = clock ();
     }
 
-  
+  sleep (1);
+  cout << endl;
   while (true)
     {
       printingTable (threadsAmount, threads);
@@ -176,8 +176,8 @@ main ()
 
   cout << "Minimum array element " << *std::min_element (arr, arr + n);
   cout << " Found min element is : " << globalMinimum << "\n\n";
-  pthread_mutex_destroy(&mutex);
-  testPrintage();
+  pthread_barrier_destroy(&BARRIER);
+  testPrintage ();
   return 0;
 }
 
@@ -204,28 +204,28 @@ printingTable (int threadAmount, pthread_t * threads)
 void *
 individualTask (void *args)
 {
+  int threadNumber = (int) ((th_param *) args)->threadNumber;
+  int min = globalMinimum;
+  int startIndex = (int) ((th_param *) args)->startIndex;
+  int endIndex = (int) ((th_param *) args)->endIndex;
+
+
+  for (int i = startIndex; i < endIndex; ++i)
+    {
+      if (min > arr[i])
+	{
+	  min = arr[i];
+	}
+    }
 
   if (synhMethod == 'm')
     {
 
-      pthread_mutex_lock (&mutex);
-
-      int threadNumber = (int) ((th_param *) args)->threadNumber;
-      int min = globalMinimum;
-      int startIndex = (int) ((th_param *) args)->startIndex;
-      int endIndex = (int) ((th_param *) args)->endIndex;
-
-
-      for (int i = startIndex; i < endIndex; ++i)
-	{
-	  if (min > arr[i])
-	    {
-	      min = arr[i];
-	    }
-	}
+      pthread_mutex_lock (&MUTEX);
 
       if (min < globalMinimum)
 	{
+	     sleep(1);
 	  globalMinimum = min;
 	}
       conclusionString +=
@@ -234,34 +234,48 @@ individualTask (void *args)
 	 std::to_string (startIndex) + " " + std::to_string (endIndex - 1) +
 	 "]" + "\n");
 
+      
+      pthread_mutex_unlock (&MUTEX);
 
-
-      pthread_mutex_unlock (&mutex);
 
     }
 
-  /*else if (synhMethod == 'b')
-     {
+  else if (synhMethod == 'b')
+    {
 
-     if (min < globalMinimum)
-     {
-     globalMinimum = min;
-     }
-     conclusionString +=
-     ("Min found by thread #" + std::to_string (threadNumber) + " : " +
-     std::to_string (min) + " My range is [" +
-     std::to_string (startIndex) + " " + std::to_string (endIndex - 1) +
-     "]" + "\n");
+  int threadNumber = (int) ((th_param *) args)->threadNumber;
+  int min = globalMinimum;
+  int startIndex = (int) ((th_param *) args)->startIndex;
+  int endIndex = (int) ((th_param *) args)->endIndex;
+  minArray[threadNumber] = arr[startIndex];
 
+  for (int i = startIndex; i < endIndex; ++i)
+    {
+      if (minArray[threadNumber] > arr[i])
+	{
+	  minArray[threadNumber] = arr[i];
+	}
+    }
+    
+    conclusionString +=
+	("Min found by thread #" + std::to_string (threadNumber) + " : " +
+	 std::to_string (minArray[threadNumber]) + " My range is [" +
+	 std::to_string (startIndex) + " " + std::to_string (endIndex - 1) +
+	 "]" + "\n");
+	 sleep(1);
      pthread_barrier_wait (&BARRIER);
-     }
-     else
-     {
-     if (min < globalMinimum)
-     {
-     globalMinimum = min;
-     }
-     } */
+     globalMinimum = *std::min_element(minArray,minArray+threadNumber);
+     
+    }
+  else
+    {
+      if (min < globalMinimum)
+	{
+	   sleep(1);
+	  globalMinimum = min;
+	}
+    }
+    pthread_exit(0);
   return NULL;
 }
 
@@ -271,7 +285,7 @@ fillArray ()
   arr = new int[n];
   for (int i = 0; i < n; ++i)
     {
-      arr[i] = rand () % 100000;
+      arr[i] = rand () % 10000000;
     }
 }
 
