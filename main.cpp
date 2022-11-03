@@ -7,9 +7,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <algorithm>
-//#include <signal.h>
-//#include <sched.h>
-//#include <sys/wait.h>
 #include <sys/resource.h>
 
 
@@ -32,7 +29,7 @@ bool canAcsess = false;
 bool ifReady = true;
 pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
 char synhMethod = ' ';
-int n = 1000;
+int n = 10000;
 int *arr;
 int threadsAmount;
 int globalMinimum;
@@ -113,7 +110,8 @@ int main ()
       params[i].endIndex = (i * amountPerThread) + amountPerThread + ostacha;
 
       pthread_create (&threads[i], NULL, &individualTask, &params[i]);
-      setpriority(PRIO_PROCESS, threads[i], priorArray[i]);
+    
+      
       time[i] = clock ();
     }
 
@@ -136,7 +134,8 @@ int main ()
 	    cout << "Enter thread to be detached: ";
 	    cin >> numb;
 
-
+	    int res  = pthread_cancel (threads[numb]);
+	    if(res == 0)cout<< "Thread# "<<numb<<" was deteched"<<endl;
 	    pthread_detach (threads[numb]);
 	    break;
 	  }
@@ -147,14 +146,17 @@ int main ()
 	    cout << "Enter number to be canceled: ";
 	    cin >> numb;
 
-
-	    pthread_cancel (threads[numb]);
+	    int res  = pthread_cancel (threads[numb]);
+	    if(res == 0)cout<< "Thread# "<<numb<<" was canceled"<<endl;
 	    break;
 	  }
 
 	case '0':
 	  {
 	    finish = true;
+	    	cout << "Minimum array element " << *std::min_element (arr, arr + n);
+  		cout << " Found min element is : " << globalMinimum << "\n\n";
+  		testPrintage ();
 	    break;
 	  }
 
@@ -189,10 +191,8 @@ int main ()
 
 
 
-  cout << "Minimum array element " << *std::min_element (arr, arr + n);
-  cout << " Found min element is : " << globalMinimum << "\n\n";
+  
   pthread_barrier_destroy(&BARRIER);
-  testPrintage ();
   return 0;
 }
 
@@ -219,11 +219,12 @@ printingTable (int threadAmount, pthread_t * threads)
 void *
 individualTask (void *args)
 {
+  
   int threadNumber = (int) ((th_param *) args)->threadNumber;
   int min = globalMinimum;
   int startIndex = (int) ((th_param *) args)->startIndex;
   int endIndex = (int) ((th_param *) args)->endIndex;
-
+  setpriority(PRIO_PROCESS, gettid(), priorArray[threadNumber]);
 
   for (int i = startIndex; i < endIndex; ++i)
     {
@@ -290,7 +291,10 @@ individualTask (void *args)
 	  globalMinimum = min;
 	}
     }
+    
+    while(true){}
     pthread_exit(0);
+    
   return NULL;
 }
 
